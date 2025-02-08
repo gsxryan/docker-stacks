@@ -1,0 +1,82 @@
+# You want to run storj on a CGNAT limited ISP, you'll need to tunnel out to a source where you can port forward.
+# Gluetun docker log will output Port in following line: INFO [port forwarding] port forwarded is 52441
+# Gluetun docker log will output IP in following line: [port forwarding] gateway external IPv4 address is 192.192.192.15
+
+services:
+  gluetunvpn:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+#    privileged: true #Don't use this unless you are troubleshooting issues
+    cap_add:
+      - NET_ADMIN
+    network_mode: bridge
+    ports:
+      #Exposed ports to internal network
+      - 14002:14002/tcp # Storj Panel Monitor
+      - ${VPN_PORT}:28967/tcp # Storj Node TCP
+      - ${VPN_PORT}:28967/udp # Storj Node UDP
+    volumes:
+      - gluetun:/gluetun
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - DOT=on
+      - DOT_PROVIDERS=quad9
+#      - HEALTH_ADDRESS_TO_PING=1.1.1.1
+                 # OpenVPN:
+#      - VPN_TYPE=openvpn
+#      - OPENVPN_USER=
+#      - OPENVPN_PASSWORD=
+                # WireGuard
+#Port Forwarding Dynamic, punch in for storj
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_PROVIDER=${VPN_PROVIDER}
+#      - VPN_PORT_FORWARDING_PROVIDER=/tmp/gluetun/forwarded_port
+      - VPN_SERVICE_PROVIDER=${VPN_PROVIDER}
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PK}
+#      - SECURE_CORE_ONLY=on
+      - PORT_FORWARD_ONLY=on
+      - SERVER_COUNTRIES=United States
+      - SERVER_CITIES=${SVR_CITIES}
+      - TZ=America/Chicago
+    restart: unless-stopped
+
+  storj:
+    image: storjlabs/storagenode:latest
+    container_name: storagenode
+    network_mode: "service:gluetunvpn"
+    environment:
+     - WALLET=${WALLET}
+     - EMAIL=${EMAIL}
+     - ADDRESS=${VPN_ID}:${VPN_PORT}
+     - STORAGE=3000GB
+    volumes:
+     - type: bind
+       source: ${SOURCE_PATH}/identity
+       target: /app/identity
+     - type: bind
+       source: ${SOURCE_PATH}/config
+       target: /app/config
+     - type: bind
+       source: ${SOURCE_PATH}/db
+       target: /app/db
+     - type: bind
+       source: ${SOURCE_PATH}/logs
+       target: /app/logs
+    command:
+      - --log.level=fatal #or fatal (min logs), error or info for debug
+      - --log.output=/app/logs/node.log
+      - --server.address=:28967
+      - --server.private-address=:7777
+      - --console.address=:14002
+      - --pieces.enable-lazy-filewalker=false
+      - --storage2.piece-scan-on-startup=true
+    #  - --filestore.write-buffer-size=4MiB
+    #  - --pieces.write-prealloc-size=4MiB
+    stop_grace_period: 300s
+    restart: unless-stopped
+    depends_on:
+      - gluetunvpn
+
+

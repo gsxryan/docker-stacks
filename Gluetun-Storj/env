@@ -1,0 +1,8 @@
+VPN_PROVIDER=provider name
+WIREGUARD_PK=
+SVR_CITIES=Chicago,Denver
+VPN_IP=
+VPN_PORT=
+EMAIL=user@server.com
+SOURCE_PATH=/mnt/storj/node1
+WALLET=0x5
